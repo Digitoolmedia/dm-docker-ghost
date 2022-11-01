@@ -1,1 +1,54 @@
+version: '3.3'
 
+services:
+  ghost:
+    image: ghost:5
+    tty: true
+    stdin_open: true
+    environment:
+      # see https://ghost.org/docs/config/#configuration-options
+      url: ${GHOST_DOMAIN}
+      database__client: mysql
+      database__connection__host: db
+      database__connection__user: root
+      database__connection__password: ${DB_ROOT_PASSWORD}
+      database__connection__database: ghost
+      #NODE_ENV: development
+    networks:
+      - traefik-public
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: 
+          - ${NODE_PLACEMENT}
+      labels:
+        traefik.enable: "true"
+        traefik.http.routers.ghost.rule: HostRegexp(`${GHOST_DOMAIN}`, `{subdomain:[a-z0-9]+}.${GHOST_DOMAIN}`)
+        traefik.http.routers.ghost.entrypoints: websecure
+        traefik.http.routers.ghost.tls.certresolver: wildcard
+        traefik.http.routers.ghost.tls.domains[0].main: "${GHOST_DOMAIN}"
+        traefik.http.routers.ghost.tls.domains[0].sans: "*.${GHOST_DOMAIN}"
+        traefik.http.routers.ghost.service: svc_ghost
+        traefik.http.services.svc_ghost.loadbalancer.server.port: 2368
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: 
+          - ${NODE_PLACEMENT}
+
+networks:
+  traefik-public:
+    external: true
